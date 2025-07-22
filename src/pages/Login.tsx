@@ -62,6 +62,21 @@ const Login = () => {
     }
   ];
 
+  const stats = [
+    { value: "10K+", label: "Emails processed daily" },
+    { value: "95%", label: "Accuracy rate" },
+    { value: "2.5hrs", label: "Time saved per day" }
+  ];
+
+  const additionalFeatures = [
+    "Auto-reply generation with your tone",
+    "Smart digest summaries", 
+    "Priority email escalation",
+    "Custom automation rules",
+    "Real-time notifications",
+    "Multi-account support"
+  ];
+
   return (
     <div className="min-h-screen flex flex-col lg:flex-row gradient-bg relative overflow-hidden">
       {/* Gradient overlay for better readability */}
@@ -109,6 +124,36 @@ const Login = () => {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Stats Section */}
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-xl">
+            <h3 className="text-lg font-semibold text-white mb-4 text-center drop-shadow-sm">
+              Trusted by professionals worldwide
+            </h3>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              {stats.map((stat, index) => (
+                <div key={index} className="space-y-1">
+                  <div className="text-2xl font-bold text-white drop-shadow-md">{stat.value}</div>
+                  <div className="text-xs text-white/80 drop-shadow-sm">{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Additional Features */}
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-xl">
+            <h3 className="text-lg font-semibold text-white mb-4 drop-shadow-sm">
+              Everything you need to manage email efficiently
+            </h3>
+            <div className="grid grid-cols-1 gap-2">
+              {additionalFeatures.map((feature, index) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <CheckCircle className="h-4 w-4 text-white/80 flex-shrink-0" />
+                  <span className="text-sm text-white/90 drop-shadow-sm">{feature}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
