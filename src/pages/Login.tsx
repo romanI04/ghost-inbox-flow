@@ -72,21 +72,23 @@ const Login = () => {
           {/* Logo */}
           <div className="text-center lg:text-left">
             <div className="flex items-center justify-center lg:justify-start space-x-3 mb-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent glow-effect">
-                <span className="text-lg font-bold text-primary-foreground">I</span>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/90 backdrop-blur-sm shadow-lg">
+                <span className="text-lg font-bold text-primary">I</span>
               </div>
-              <h1 className="gradient-text text-3xl font-bold tracking-tight">
+              <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-lg">
                 Inghost
               </h1>
             </div>
             
-            <h2 className="text-2xl lg:text-3xl font-bold text-foreground mb-4">
-              Your AI Email Assistant
-            </h2>
-            <p className="text-lg text-muted-foreground">
-              Automate Gmail triage with intelligent categorization, 
-              draft generation, and smart notifications.
-            </p>
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-xl">
+              <h2 className="text-2xl lg:text-3xl font-bold text-white mb-4 drop-shadow-md">
+                Your AI Email Assistant
+              </h2>
+              <p className="text-lg text-white/90 drop-shadow-sm">
+                Automate Gmail triage with intelligent categorization, 
+                draft generation, and smart notifications.
+              </p>
+            </div>
           </div>
 
           {/* Features */}
@@ -94,14 +96,16 @@ const Login = () => {
             {features.map((feature, index) => (
               <div 
                 key={index}
-                className="flex items-start space-x-3 p-4 rounded-lg glass-card hover-lift"
+                className="flex items-start space-x-3 p-4 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 shadow-lg hover:bg-white/15 smooth-transition"
               >
                 <div className="flex-shrink-0">
-                  <feature.icon className="h-6 w-6 text-primary" />
+                  <div className="p-2 rounded-lg bg-white/20 backdrop-blur-sm">
+                    <feature.icon className="h-6 w-6 text-white" />
+                  </div>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-foreground">{feature.title}</h3>
-                  <p className="text-sm text-muted-foreground">{feature.description}</p>
+                  <h3 className="font-semibold text-white drop-shadow-sm">{feature.title}</h3>
+                  <p className="text-sm text-white/80 drop-shadow-sm">{feature.description}</p>
                 </div>
               </div>
             ))}
