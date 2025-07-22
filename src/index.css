@@ -9,49 +9,57 @@ All colors MUST be HSL for proper theming support.
 @layer base {
   :root {
     /* Base colors - light theme */
-    --background: 220 20% 99%;
-    --foreground: 222 47% 11%;
+    --background: 45 100% 96%;
+    --foreground: 210 70% 15%;
 
     /* Card system with glass-morphism */
-    --card: 220 20% 97%;
-    --card-foreground: 222 47% 11%;
-    --card-glass: 220 30% 98%;
+    --card: 45 100% 98%;
+    --card-foreground: 210 70% 15%;
+    --card-glass: 45 50% 97%;
     
     /* Popovers and tooltips */
-    --popover: 220 20% 97%;
-    --popover-foreground: 222 47% 11%;
+    --popover: 45 100% 98%;
+    --popover-foreground: 210 70% 15%;
 
-    /* Primary brand - professional blue */
-    --primary: 223 83% 33%;
-    --primary-light: 223 83% 45%;
-    --primary-foreground: 220 20% 99%;
-    --primary-glow: 223 83% 55%;
+    /* Primary brand - gradient blue */
+    --primary: 210 70% 35%;
+    --primary-light: 210 70% 50%;
+    --primary-foreground: 45 100% 98%;
+    --primary-glow: 210 70% 60%;
 
-    /* Secondary - subtle accent */
-    --secondary: 220 20% 94%;
-    --secondary-foreground: 222 47% 11%;
+    /* Secondary - warm amber */
+    --secondary: 25 85% 85%;
+    --secondary-foreground: 210 70% 15%;
 
     /* Muted elements */
-    --muted: 220 20% 94%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 40 40% 92%;
+    --muted-foreground: 210 30% 45%;
 
-    /* Accent - purple highlights */
-    --accent: 250 65% 55%;
-    --accent-light: 250 65% 65%;
-    --accent-foreground: 220 20% 99%;
+    /* Accent - vibrant orange */
+    --accent: 25 85% 60%;
+    --accent-light: 25 85% 70%;
+    --accent-foreground: 45 100% 98%;
 
     /* Status colors */
     --destructive: 0 85% 60%;
-    --destructive-foreground: 220 20% 99%;
+    --destructive-foreground: 45 100% 98%;
     --success: 142 76% 36%;
-    --success-foreground: 220 20% 99%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 222 47% 11%;
+    --success-foreground: 45 100% 98%;
+    --warning: 40 95% 60%;
+    --warning-foreground: 210 70% 15%;
 
     /* Borders and inputs */
-    --border: 220 20% 88%;
-    --input: 220 20% 91%;
-    --ring: 223 83% 33%;
+    --border: 40 30% 85%;
+    --input: 40 30% 88%;
+    --ring: 210 70% 35%;
+
+    --radius: 0.5rem;
+
+    /* Gradient variables for the beautiful background */
+    --gradient-start: 210 70% 20%;
+    --gradient-mid-blue: 210 70% 50%;
+    --gradient-mid-orange: 25 85% 60%;
+    --gradient-end: 40 95% 65%;
 
     --radius: 0.5rem;
 
@@ -73,58 +81,56 @@ All colors MUST be HSL for proper theming support.
   }
 
   .dark {
-    /* Dark theme - professional and comfortable */
-    --background: 222 47% 6%;
-    --foreground: 220 20% 95%;
+    /* Dark theme with gradient palette */
+    --background: 210 70% 8%;
+    --foreground: 40 95% 95%;
 
-    /* Dark cards with subtle transparency */
-    --card: 222 47% 8%;
-    --card-foreground: 220 20% 95%;
-    --card-glass: 222 47% 10%;
+    /* Dark cards with gradient influence */
+    --card: 210 60% 10%;
+    --card-foreground: 40 95% 95%;
+    --card-glass: 210 50% 12%;
 
     /* Dark popovers */
-    --popover: 222 47% 8%;
-    --popover-foreground: 220 20% 95%;
+    --popover: 210 60% 10%;
+    --popover-foreground: 40 95% 95%;
 
-    /* Primary stays vibrant in dark mode */
-    --primary: 223 83% 45%;
-    --primary-light: 223 83% 55%;
-    --primary-foreground: 220 20% 99%;
-    --primary-glow: 223 83% 65%;
+    /* Primary blue stays vibrant */
+    --primary: 210 70% 50%;
+    --primary-light: 210 70% 60%;
+    --primary-foreground: 40 95% 98%;
+    --primary-glow: 210 70% 70%;
 
-    /* Dark secondary */
-    --secondary: 222 47% 12%;
-    --secondary-foreground: 220 20% 95%;
+    /* Dark secondary with orange tint */
+    --secondary: 25 40% 15%;
+    --secondary-foreground: 40 95% 95%;
 
-    /* Dark muted */
-    --muted: 222 47% 12%;
-    --muted-foreground: 215 16% 65%;
+    /* Dark muted with warm tint */
+    --muted: 30 20% 15%;
+    --muted-foreground: 40 30% 65%;
 
-    /* Accent purple for dark mode */
-    --accent: 250 65% 60%;
-    --accent-light: 250 65% 70%;
-    --accent-foreground: 220 20% 99%;
+    /* Accent orange stays vibrant */
+    --accent: 25 85% 65%;
+    --accent-light: 25 85% 75%;
+    --accent-foreground: 210 70% 10%;
 
     /* Dark status colors */
     --destructive: 0 85% 55%;
-    --destructive-foreground: 220 20% 99%;
+    --destructive-foreground: 40 95% 98%;
     --success: 142 76% 45%;
-    --success-foreground: 220 20% 99%;
-    --warning: 38 92% 60%;
-    --warning-foreground: 222 47% 6%;
+    --success-foreground: 40 95% 98%;
+    --warning: 40 95% 65%;
+    --warning-foreground: 210 70% 10%;
 
-    /* Dark borders */
-    --border: 222 47% 15%;
-    --input: 222 47% 12%;
-    --ring: 223 83% 45%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Dark borders with gradient influence */
+    --border: 210 30% 20%;
+    --input: 210 30% 15%;
+    --ring: 210 70% 50%;
+
+    /* Gradient variables for dark mode */
+    --gradient-start: 210 70% 15%;
+    --gradient-mid-blue: 210 70% 40%;
+    --gradient-mid-orange: 25 85% 50%;
+    --gradient-end: 40 95% 60%;
   }
 }
 
@@ -136,6 +142,26 @@ All colors MUST be HSL for proper theming support.
   
   .gradient-text {
     @apply bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent;
+  }
+  
+  .gradient-bg {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--gradient-start)) 0%,
+      hsl(var(--gradient-mid-blue)) 25%,
+      hsl(var(--gradient-mid-orange)) 70%,
+      hsl(var(--gradient-end)) 100%
+    );
+  }
+  
+  .gradient-overlay {
+    background: linear-gradient(
+      135deg,
+      hsla(var(--gradient-start), 0.9) 0%,
+      hsla(var(--gradient-mid-blue), 0.7) 25%,
+      hsla(var(--gradient-mid-orange), 0.8) 70%,
+      hsla(var(--gradient-end), 0.9) 100%
+    );
   }
   
   .glow-effect {

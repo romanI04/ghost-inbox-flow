@@ -63,9 +63,11 @@ const Login = () => {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-screen flex flex-col lg:flex-row gradient-bg relative overflow-hidden">
+      {/* Gradient overlay for better readability */}
+      <div className="absolute inset-0 gradient-overlay opacity-95" />
       {/* Left Panel - Hero Section */}
-      <div className="flex-1 flex items-center justify-center p-8 lg:p-12">
+      <div className="flex-1 flex items-center justify-center p-8 lg:p-12 relative z-10">
         <div className="max-w-md w-full space-y-8">
           {/* Logo */}
           <div className="text-center lg:text-left">
@@ -108,7 +110,7 @@ const Login = () => {
       </div>
 
       {/* Right Panel - Login Form */}
-      <div className="flex-1 flex items-center justify-center p-8 lg:p-12">
+      <div className="flex-1 flex items-center justify-center p-8 lg:p-12 relative z-10">
         <div className="max-w-sm w-full">
           <Card className="glass-card border-0 shadow-2xl">
             <CardHeader className="text-center space-y-2">
