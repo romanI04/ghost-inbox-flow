@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,48 +10,117 @@ import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
 import Navigation from "./components/navigation/Navigation";
 import NotFound from "./pages/NotFound";
+import OAuthCallback from "./pages/OAuthCallback";
 
-const queryClient = new QueryClient();
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+export const supabase = createClient(supabaseUrl, supabaseAnonKey); // Export for use in other files
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1, // Retry failed fetches once
+      staleTime: 1000 * 60, // 1 minute cache
+    },
+  },
+});
 
 const App = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [session, setSession] = useState(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check authentication status and theme on app load
   useEffect(() => {
-    const checkAuth = () => {
-      // In real implementation, check Supabase session
-      // const { data: { session } } = await supabase.auth.getSession();
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) console.error('Session error:', error);
+      setSession(session);
       
-      const savedAuth = localStorage.getItem('inghost_authenticated');
-      setIsAuthenticated(savedAuth === 'true');
-      
-      const savedTheme = localStorage.getItem('inghost_theme');
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setIsDarkMode(savedTheme === 'dark' || (!savedTheme && prefersDark));
+      // Check if we need to capture Gmail tokens after Supabase OAuth
+      const urlParams = new URLSearchParams(window.location.search);
+      if (session && urlParams.get('gmail_auth') === 'needed') {
+        // Clear the URL parameter
+        window.history.replaceState({}, document.title, window.location.pathname);
+        // Trigger Gmail token capture
+        captureGmailTokens(session.user.id);
+        return;
+      }
       
       setIsLoading(false);
-    };
-    
-    checkAuth();
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      
+      // Check if we need to capture Gmail tokens after Supabase OAuth
+      const urlParams = new URLSearchParams(window.location.search);
+      if (session && urlParams.get('gmail_auth') === 'needed') {
+        // Clear the URL parameter
+        window.history.replaceState({}, document.title, window.location.pathname);
+        // Trigger Gmail token capture
+        captureGmailTokens(session.user.id);
+      }
+    });
+
+    const savedTheme = localStorage.getItem('inghost_theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    setIsDarkMode(savedTheme === 'dark' || (!savedTheme && prefersDark));
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Apply theme to document
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDarkMode);
     localStorage.setItem('inghost_theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
-  const handleLogin = () => {
-    setIsAuthenticated(true);
-    localStorage.setItem('inghost_authenticated', 'true');
+  const handleLogin = async () => {
+    try {
+      // Authenticate with Supabase to create/login user
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}?gmail_auth=needed`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent'
+          }
+        },
+      });
+      
+      if (error) {
+        console.error('Login error:', error.message);
+        return;
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+    }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('inghost_authenticated');
-    // In real implementation: await supabase.auth.signOut();
+  const captureGmailTokens = async (userId: string) => {
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/capture-google-tokens`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({ user_id: userId }),
+      });
+
+      const data = await response.json();
+      if (data.auth_url) {
+        // Redirect to Google OAuth for Gmail tokens
+        window.location.href = data.auth_url;
+      }
+    } catch (error) {
+      console.error('Error capturing Gmail tokens:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) console.error('Logout error:', error);
+    setSession(null);
   };
 
   const toggleTheme = () => {
@@ -67,6 +137,8 @@ const App = () => {
       </div>
     );
   }
+
+  const isAuthenticated = !!session;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -89,7 +161,7 @@ const App = () => {
                   isAuthenticated ? (
                     <Navigate to="/dashboard" replace />
                   ) : (
-                    <Login />
+                    <Login onLogin={handleLogin} />
                   )
                 } 
               />
@@ -97,7 +169,7 @@ const App = () => {
                 path="/dashboard" 
                 element={
                   isAuthenticated ? (
-                    <Dashboard />
+                    <Dashboard session={session} />
                   ) : (
                     <Navigate to="/" replace />
                   )
@@ -107,12 +179,13 @@ const App = () => {
                 path="/settings" 
                 element={
                   isAuthenticated ? (
-                    <Settings />
+                    <Settings session={session} />
                   ) : (
                     <Navigate to="/" replace />
                   )
                 } 
               />
+              <Route path="/oauth-callback" element={<OAuthCallback />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </div>

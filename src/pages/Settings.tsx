@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { 
-  Sliders,
+  Sliders as SlidersIcon,
   Shield,
   Clock,
   CreditCard,
@@ -17,589 +17,607 @@ import {
   Settings as SettingsIcon,
   Bell,
   Volume2,
-  VolumeX
+  VolumeX,
+  Loader2
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "../App";
 
-interface ToneSettings {
-  formality: number;
-  emojiUsage: number;
-  brevity: number;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+interface SettingsProps {
+  session: any;
 }
 
-interface ThresholdSettings {
-  autoReplyRisk: "low" | "medium" | "high";
-  escalationRisk: "low" | "medium" | "high";
-  digestFrequency: "hourly" | "daily" | "weekly";
+interface UserSettings {
+  [key: string]: any;
 }
 
-interface NotificationSettings {
-  emailNotifications: boolean;
-  pushNotifications: boolean;
-  soundEnabled: boolean;
-  digestTime: string;
-}
-
-const Settings = () => {
-  const [isLoading, setIsLoading] = useState(false);
+const Settings = ({ session }: SettingsProps) => {
   const [isSaving, setIsSaving] = useState(false);
-  const [toneSettings, setToneSettings] = useState<ToneSettings>({
+  const [toneSettings, setToneSettings] = useState({
     formality: 70,
     emojiUsage: 30,
     brevity: 80
   });
-  const [thresholdSettings, setThresholdSettings] = useState<ThresholdSettings>({
+  const [thresholdSettings, setThresholdSettings] = useState<{
+    autoReplyRisk: "low" | "medium" | "high";
+    escalationRisk: "low" | "medium" | "high";
+    digestFrequency: "hourly" | "daily" | "weekly";
+  }>({
     autoReplyRisk: "medium",
     escalationRisk: "high",
     digestFrequency: "daily"
   });
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
+  const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
     pushNotifications: true,
     soundEnabled: false,
     digestTime: "09:00"
   });
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Load settings on component mount
-  useEffect(() => {
-    const loadSettings = async () => {
-      setIsLoading(true);
-      
-      try {
-        // Placeholder API calls
-        // const toneResponse = await fetch('/api/settings/tone');
-        // const thresholdResponse = await fetch('/api/settings/thresholds');
-        // const notificationResponse = await fetch('/api/settings/notifications');
-        
-        // Simulate loading delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Mock loaded settings - in real app these would come from API
-        setToneSettings({
-          formality: 75,
-          emojiUsage: 25,
-          brevity: 85
-        });
-        
-      } catch (error) {
-        toast({
-          variant: "destructive",
-          title: "Failed to load settings",
-          description: "Please refresh the page to try again.",
-        });
-      } finally {
-        setIsLoading(false);
+  // Gmail connection status
+  const { data: gmailTokens, isLoading: gmailLoading } = useQuery({
+    queryKey: ['gmailTokens', session?.user.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('provider_tokens')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('provider', 'google')
+        .single();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    },
+    enabled: !!session,
+  });
+
+  const connectGmail = async () => {
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/capture-google-tokens`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ user_id: session.user.id }),
+      });
+
+      const data = await response.json();
+      if (data.auth_url) {
+        window.location.href = data.auth_url;
       }
-    };
-    
-    loadSettings();
-  }, [toast]);
-
-  const handleSaveToneSettings = async () => {
-    setIsSaving(true);
-    
-    try {
-      // Placeholder API call
-      // await fetch('/api/update-tone', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(toneSettings)
-      // });
-      
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      toast({
-        title: "Tone settings saved",
-        description: "Your AI assistant will use the new tone preferences.",
-      });
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Failed to save settings",
-        description: "Please try again.",
+      console.error('Error connecting Gmail:', error);
+      toast({ title: "Error connecting Gmail", description: "Please try again", variant: "destructive" });
+    }
+  };
+
+  // Fetch settings from Supabase
+  const { data: userSettings, isLoading: settingsLoading, error: settingsError } = useQuery({
+    queryKey: ['userSettings', session?.user.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('user_preferences')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .single(); // Assume one row per user
+      if (error && error.code !== 'PGRST116') throw error; // Ignore no-row error
+      return data || {}; // Default empty if no row
+    },
+    enabled: !!session,
+  });
+
+  useEffect(() => {
+    if (userSettings) {
+      setToneSettings({
+        formality: userSettings.formality || 70,
+        emojiUsage: userSettings.emoji_usage || 30,
+        brevity: userSettings.brevity || 80
+      });
+      setThresholdSettings({
+        autoReplyRisk: userSettings.risk_threshold_low || "medium",
+        escalationRisk: userSettings.risk_threshold_medium || "high",
+        digestFrequency: userSettings.digest_schedule ? "daily" : "daily" // Map timestamp to frequency if needed
+      });
+      // Map other fields as needed
+    }
+    if (settingsError) toast({ title: "Error loading settings", description: settingsError.message, variant: "destructive" });
+  }, [userSettings, settingsError, toast]);
+
+  // Mutation for saving all settings (upsert to user_preferences)
+  const saveMutation = useMutation({
+    mutationFn: async (newSettings: UserSettings) => {
+      const { error } = await supabase
+        .from('user_preferences')
+        .upsert({ user_id: session.user.id, ...newSettings }, { onConflict: 'user_id' });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userSettings'] });
+      setIsSaving(false);
+      toast({ title: "Settings saved successfully" });
+    },
+    onError: (error: Error) => {
+      setIsSaving(false);
+      toast({ title: "Error saving settings", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Test Functions
+  const testSetupWatch = async () => {
+    setIsSaving(true);
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/setup-watch`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({}),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast({ 
+          title: "Gmail Watch Setup Successful!", 
+          description: `Gmail will now notify us of new emails. Expiration: ${new Date(parseInt(data.expiration)).toLocaleString()}` 
+        });
+      } else {
+        throw new Error(data.error || 'Setup watch failed');
+      }
+    } catch (error) {
+      console.error('Error setting up Gmail watch:', error);
+      toast({ 
+        title: "Gmail Watch Setup Failed", 
+        description: error.message || "Please check your Gmail connection", 
+        variant: "destructive" 
       });
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleSaveThresholds = async () => {
+  const testClassifyEmail = async () => {
     setIsSaving(true);
-    
     try {
-      // Placeholder API call
-      // await fetch('/api/update-thresholds', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(thresholdSettings)
-      // });
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      toast({
-        title: "Threshold settings saved",
-        description: "Updated automation rules and risk levels.",
+      const response = await fetch(`${supabaseUrl}/functions/v1/classify-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          message_id: `test_${Date.now()}`,
+          subject: "Urgent: Budget Approval Needed by EOD",
+          sender: "finance@company.com",
+          body: "Hi there, I need your approval on the Q2 budget proposal. The board meeting is tomorrow and we need your sign-off by end of day. Please review the attached spreadsheet and let me know if you have any concerns. Thanks!"
+        }),
       });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast({ 
+          title: "Email Classification Successful!", 
+          description: `Category: ${data.category}, Urgency: ${data.urgency}, Action: ${data.required_action}` 
+        });
+        // Refresh the dashboard data
+        queryClient.invalidateQueries({ queryKey: ['emails'] });
+      } else {
+        throw new Error(data.error || 'Classification failed');
+      }
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Failed to save thresholds",
-        description: "Please try again.",
+      console.error('Error classifying email:', error);
+      toast({ 
+        title: "Email Classification Failed", 
+        description: error.message || "Please try again", 
+        variant: "destructive" 
       });
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleSaveNotifications = async () => {
+  const testGenerateDraft = async () => {
     setIsSaving(true);
-    
     try {
-      // Placeholder API call for digest schedule
-      // await fetch('/api/update-schedule', {
-      //   method: 'POST', 
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ digestTime: notificationSettings.digestTime })
-      // });
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      toast({
-        title: "Notification settings saved",
-        description: "Your preferences have been updated.",
+      // First get the latest email to generate a draft for
+      const { data: emails, error: emailError } = await supabase
+        .from('emails')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (emailError || !emails || emails.length === 0) {
+        throw new Error('No emails found. Try classifying an email first.');
+      }
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/generate-draft`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          email_id: emails[0].id
+        }),
       });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast({ 
+          title: "Draft Generation Successful!", 
+          description: `Draft: "${data.draft.substring(0, 100)}..." Status: ${data.status}` 
+        });
+        // Refresh the dashboard data
+        queryClient.invalidateQueries({ queryKey: ['emails'] });
+      } else {
+        throw new Error(data.error || 'Draft generation failed');
+      }
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Failed to save notifications",
-        description: "Please try again.",
+      console.error('Error generating draft:', error);
+      toast({ 
+        title: "Draft Generation Failed", 
+        description: error.message || "Please try again", 
+        variant: "destructive" 
       });
     } finally {
       setIsSaving(false);
     }
   };
 
-  const getRiskBadgeColor = (risk: string) => {
-    switch (risk) {
-      case "low": return "bg-success/10 text-success border-success/20";
-      case "medium": return "bg-warning/10 text-warning border-warning/20";
-      case "high": return "bg-destructive/10 text-destructive border-destructive/20";
-      default: return "bg-muted text-muted-foreground border-border";
+  const testUpdateTone = async () => {
+    setIsSaving(true);
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/update-tone`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          formality: toneSettings.formality,
+          emoji_usage: toneSettings.emojiUsage,
+          brevity: toneSettings.brevity
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast({ 
+          title: "Tone Function Test Successful!", 
+          description: `Updated: Formality ${data.preferences.formality}%, Emoji ${data.preferences.emoji_usage}%, Brevity ${data.preferences.brevity}%` 
+        });
+        // Refresh settings data
+        queryClient.invalidateQueries({ queryKey: ['userSettings'] });
+      } else {
+        throw new Error(data.error || 'Update tone function failed');
+      }
+    } catch (error) {
+      console.error('Error testing update-tone function:', error);
+      toast({ 
+        title: "Tone Function Test Failed", 
+        description: error.message || "Please try again", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Settings</h1>
-          <p className="text-muted-foreground">Configure your AI email assistant</p>
-        </div>
-        
-        <div className="grid gap-6">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="glass-card">
-              <CardHeader>
-                <div className="h-6 bg-muted rounded animate-pulse" />
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="h-4 bg-muted rounded animate-pulse" />
-                  <div className="h-8 bg-muted rounded animate-pulse" />
-                  <div className="h-4 bg-muted rounded animate-pulse w-2/3" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
+  const handleSaveToneSettings = () => {
+    setIsSaving(true);
+    saveMutation.mutate(toneSettings);
+  };
+
+  const handleSaveThresholds = () => {
+    setIsSaving(true);
+    saveMutation.mutate(thresholdSettings);
+  };
+
+  const handleSaveNotifications = () => {
+    setIsSaving(true);
+    saveMutation.mutate(notificationSettings); // Adjust fields as per table
+  };
+
+  if (settingsLoading) {
+    return <div className="flex justify-center items-center min-h-screen"><Loader2 className="animate-spin" size={48} /></div>;
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2 gradient-text">Settings</h1>
-        <p className="text-muted-foreground">
-          Configure your AI email assistant to match your preferences
-        </p>
-      </div>
+    <div className="container mx-auto p-6 space-y-8">
+      <h1 className="text-3xl font-bold text-foreground">Settings</h1>
 
-      {/* Tone Settings */}
-      <Card className="glass-card hover-lift">
+      {/* Gmail Connection Card */}
+      <Card>
         <CardHeader>
-          <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Sliders className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <CardTitle>Tone & Style</CardTitle>
-              <CardDescription>
-                Customize how your AI assistant communicates
-              </CardDescription>
-            </div>
-          </div>
+          <CardTitle className="flex items-center gap-2">
+            <SettingsIcon className="h-5 w-5" />
+            Gmail Connection
+          </CardTitle>
+          <CardDescription>Manage your Gmail account connection for email automation</CardDescription>
         </CardHeader>
-        
-        <CardContent className="space-y-6">
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <Label className="text-sm font-medium">Formality Level</Label>
-                <Badge variant="outline">{toneSettings.formality}%</Badge>
-              </div>
-              <Slider
-                value={[toneSettings.formality]}
-                onValueChange={(value) => setToneSettings(prev => ({ ...prev, formality: value[0] }))}
-                max={100}
-                step={5}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                <span>Casual</span>
-                <span>Professional</span>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <Label className="text-sm font-medium">Emoji Usage</Label>
-                <Badge variant="outline">{toneSettings.emojiUsage}%</Badge>
-              </div>
-              <Slider
-                value={[toneSettings.emojiUsage]}
-                onValueChange={(value) => setToneSettings(prev => ({ ...prev, emojiUsage: value[0] }))}
-                max={100}
-                step={5}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                <span>Minimal</span>
-                <span>Frequent</span>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <Label className="text-sm font-medium">Response Brevity</Label>
-                <Badge variant="outline">{toneSettings.brevity}%</Badge>
-              </div>
-              <Slider
-                value={[toneSettings.brevity]}
-                onValueChange={(value) => setToneSettings(prev => ({ ...prev, brevity: value[0] }))}
-                max={100}
-                step={5}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                <span>Detailed</span>
-                <span>Concise</span>
-              </div>
-            </div>
-          </div>
-
-          <Button 
-            onClick={handleSaveToneSettings}
-            disabled={isSaving}
-            className="w-full bg-gradient-to-r from-primary to-primary-light"
-          >
-            {isSaving ? (
-              <>
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent mr-2" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                Save Tone Settings
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Threshold Settings */}
-      <Card className="glass-card hover-lift">
-        <CardHeader>
-          <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-lg bg-warning/10">
-              <Shield className="h-5 w-5 text-warning" />
-            </div>
-            <div>
-              <CardTitle>Risk Thresholds</CardTitle>
-              <CardDescription>
-                Set automation confidence levels
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        
-        <CardContent className="space-y-6">
-          <div className="grid gap-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Auto-Reply Risk Level</Label>
-              <Select 
-                value={thresholdSettings.autoReplyRisk} 
-                onValueChange={(value: "low" | "medium" | "high") => 
-                  setThresholdSettings(prev => ({ ...prev, autoReplyRisk: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">
-                    <div className="flex items-center space-x-2">
-                      <Badge className={getRiskBadgeColor("low")}>Low</Badge>
-                      <span>Conservative - Manual review for most emails</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="medium">
-                    <div className="flex items-center space-x-2">
-                      <Badge className={getRiskBadgeColor("medium")}>Medium</Badge>
-                      <span>Balanced - Auto-reply to common patterns</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="high">
-                    <div className="flex items-center space-x-2">
-                      <Badge className={getRiskBadgeColor("high")}>High</Badge>
-                      <span>Aggressive - Auto-reply to most emails</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Escalation Threshold</Label>
-              <Select 
-                value={thresholdSettings.escalationRisk} 
-                onValueChange={(value: "low" | "medium" | "high") => 
-                  setThresholdSettings(prev => ({ ...prev, escalationRisk: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">
-                    <div className="flex items-center space-x-2">
-                      <Badge className={getRiskBadgeColor("low")}>Low</Badge>
-                      <span>Escalate urgent emails immediately</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="medium">
-                    <div className="flex items-center space-x-2">
-                      <Badge className={getRiskBadgeColor("medium")}>Medium</Badge>
-                      <span>Escalate high-priority emails</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="high">
-                    <div className="flex items-center space-x-2">
-                      <Badge className={getRiskBadgeColor("high")}>High</Badge>
-                      <span>Minimal escalation</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Digest Frequency</Label>
-              <Select 
-                value={thresholdSettings.digestFrequency} 
-                onValueChange={(value: "hourly" | "daily" | "weekly") => 
-                  setThresholdSettings(prev => ({ ...prev, digestFrequency: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="hourly">Every hour</SelectItem>
-                  <SelectItem value="daily">Daily summary</SelectItem>
-                  <SelectItem value="weekly">Weekly roundup</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <Button 
-            onClick={handleSaveThresholds}
-            disabled={isSaving}
-            className="w-full bg-gradient-to-r from-warning to-warning/80"
-          >
-            {isSaving ? (
-              <>
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-warning-foreground border-t-transparent mr-2" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                Save Threshold Settings
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Notification Settings */}
-      <Card className="glass-card hover-lift">
-        <CardHeader>
-          <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-lg bg-accent/10">
-              <Bell className="h-5 w-5 text-accent" />
-            </div>
-            <div>
-              <CardTitle>Notifications & Schedule</CardTitle>
-              <CardDescription>
-                Manage how and when you receive updates
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        
-        <CardContent className="space-y-6">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium">Email Notifications</Label>
-                <p className="text-xs text-muted-foreground">
-                  Receive email summaries and urgent alerts
-                </p>
-              </div>
-              <Switch
-                checked={notificationSettings.emailNotifications}
-                onCheckedChange={(checked) => 
-                  setNotificationSettings(prev => ({ ...prev, emailNotifications: checked }))
-                }
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium">Push Notifications</Label>
-                <p className="text-xs text-muted-foreground">
-                  Browser notifications for real-time updates
-                </p>
-              </div>
-              <Switch
-                checked={notificationSettings.pushNotifications}
-                onCheckedChange={(checked) => 
-                  setNotificationSettings(prev => ({ ...prev, pushNotifications: checked }))
-                }
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5 flex-1">
-                <Label className="text-sm font-medium">Sound Notifications</Label>
-                <p className="text-xs text-muted-foreground">
-                  Audio alerts for important emails
-                </p>
-              </div>
-              <div className="flex items-center space-x-2">
-                {notificationSettings.soundEnabled ? (
-                  <Volume2 className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <VolumeX className="h-4 w-4 text-muted-foreground" />
-                )}
-                <Switch
-                  checked={notificationSettings.soundEnabled}
-                  onCheckedChange={(checked) => 
-                    setNotificationSettings(prev => ({ ...prev, soundEnabled: checked }))
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Daily Digest Time</Label>
-              <Input
-                type="time"
-                value={notificationSettings.digestTime}
-                onChange={(e) => 
-                  setNotificationSettings(prev => ({ ...prev, digestTime: e.target.value }))
-                }
-                className="w-full"
-              />
-              <p className="text-xs text-muted-foreground">
-                When to receive your daily email summary
-              </p>
-            </div>
-          </div>
-
-          <Button 
-            onClick={handleSaveNotifications}
-            disabled={isSaving}
-            className="w-full bg-gradient-to-r from-accent to-accent-light"
-          >
-            {isSaving ? (
-              <>
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent-foreground border-t-transparent mr-2" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                Save Notification Settings
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Billing Section */}
-      <Card className="glass-card hover-lift">
-        <CardHeader>
-          <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-lg bg-destructive/10">
-              <CreditCard className="h-5 w-5 text-destructive" />
-            </div>
-            <div>
-              <CardTitle>Billing & Subscription</CardTitle>
-              <CardDescription>
-                Manage your Inghost subscription
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-4 rounded-lg bg-card-glass border border-border/50">
-            <div>
-              <h3 className="font-semibold">Pro Plan</h3>
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="font-medium">Gmail Account Status</p>
               <p className="text-sm text-muted-foreground">
-                Advanced AI features, unlimited emails, priority support
+                {gmailLoading ? 'Checking connection...' : 
+                 gmailTokens ? 'Connected and authorized' : 'Not connected'}
               </p>
             </div>
-            <Badge className="bg-success/10 text-success border-success/20">
-              <Check className="h-3 w-3 mr-1" />
-              Active
-            </Badge>
+            <div className="flex items-center gap-2">
+              {gmailLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : gmailTokens ? (
+                <>
+                  <Badge variant="secondary" className="bg-green-100 text-green-800">
+                    <Check className="h-3 w-3 mr-1" />
+                    Connected
+                  </Badge>
+                  <Button variant="outline" size="sm" onClick={connectGmail}>
+                    Reconnect
+                  </Button>
+                </>
+              ) : (
+                <Button onClick={connectGmail}>
+                  Connect Gmail
+                </Button>
+              )}
+            </div>
+          </div>
+          {gmailTokens && (
+            <div className="text-xs text-muted-foreground">
+              Last updated: {new Date(gmailTokens.updated_at).toLocaleDateString()}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Tone Settings Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <SlidersIcon className="h-5 w-5" />
+            Tone Preferences
+          </CardTitle>
+          <CardDescription>Customize the writing style of automated responses</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label className="flex justify-between">
+              <span>Formality</span>
+              <span>{toneSettings.formality}%</span>
+            </Label>
+            <Slider
+              value={[toneSettings.formality]}
+              onValueChange={([value]) => setToneSettings({ ...toneSettings, formality: value })}
+              max={100}
+              step={1}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="flex justify-between">
+              <span>Emoji Usage</span>
+              <span>{toneSettings.emojiUsage}%</span>
+            </Label>
+            <Slider
+              value={[toneSettings.emojiUsage]}
+              onValueChange={([value]) => setToneSettings({ ...toneSettings, emojiUsage: value })}
+              max={100}
+              step={1}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="flex justify-between">
+              <span>Brevity</span>
+              <span>{toneSettings.brevity}%</span>
+            </Label>
+            <Slider
+              value={[toneSettings.brevity]}
+              onValueChange={([value]) => setToneSettings({ ...toneSettings, brevity: value })}
+              max={100}
+              step={1}
+            />
+          </div>
+          <Button onClick={handleSaveToneSettings} disabled={isSaving}>
+            {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2 h-4 w-4" />}
+            Save Tone Settings
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Threshold Settings Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Risk Thresholds & Automation
+          </CardTitle>
+          <CardDescription>Set levels for auto-actions and escalations</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div>
+            <Label>Auto-Reply Risk Threshold</Label>
+            <Select value={thresholdSettings.autoReplyRisk} onValueChange={(value: "low" | "medium" | "high") => setThresholdSettings({ ...thresholdSettings, autoReplyRisk: value })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Escalation Risk Threshold</Label>
+            <Select value={thresholdSettings.escalationRisk} onValueChange={(value: "low" | "medium" | "high") => setThresholdSettings({ ...thresholdSettings, escalationRisk: value })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Digest Frequency</Label>
+            <Select value={thresholdSettings.digestFrequency} onValueChange={(value: "hourly" | "daily" | "weekly") => setThresholdSettings({ ...thresholdSettings, digestFrequency: value })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hourly">Hourly</SelectItem>
+                <SelectItem value="daily">Daily</SelectItem>
+                <SelectItem value="weekly">Weekly</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={handleSaveThresholds} disabled={isSaving}>
+            {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2 h-4 w-4" />}
+            Save Thresholds
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Notification Settings Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            Notifications & Digest
+          </CardTitle>
+          <CardDescription>Manage how and when you receive updates</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
+            <Label>Email Notifications</Label>
+            <Switch
+              checked={notificationSettings.emailNotifications}
+              onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, emailNotifications: checked })}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label>Push Notifications</Label>
+            <Switch
+              checked={notificationSettings.pushNotifications}
+              onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, pushNotifications: checked })}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label>Sound Alerts</Label>
+            <Switch
+              checked={notificationSettings.soundEnabled}
+              onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, soundEnabled: checked })}
+            />
+          </div>
+          <div>
+            <Label>Digest Delivery Time</Label>
+            <Input
+              type="time"
+              value={notificationSettings.digestTime}
+              onChange={(e) => setNotificationSettings({ ...notificationSettings, digestTime: e.target.value })}
+            />
+          </div>
+          <Button onClick={handleSaveNotifications} disabled={isSaving}>
+            {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2 h-4 w-4" />}
+            Save Notification Settings
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Test Functions Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <SettingsIcon className="h-5 w-5" />
+            Test Functions
+          </CardTitle>
+          <CardDescription>Test your email processing pipeline end-to-end</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Button 
+              onClick={testSetupWatch} 
+              disabled={!gmailTokens || isSaving}
+              className="w-full"
+            >
+              {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Bell className="mr-2 h-4 w-4" />}
+              Setup Gmail Watch (Real-time notifications)
+            </Button>
+            {!gmailTokens && (
+              <p className="text-sm text-muted-foreground">Connect Gmail first to test functions</p>
+            )}
           </div>
           
-          <div className="grid grid-cols-2 gap-4 text-center">
-            <div className="p-3 rounded-lg bg-muted/30">
-              <p className="text-2xl font-bold">1,247</p>
-              <p className="text-xs text-muted-foreground">Emails processed this month</p>
-            </div>
-            <div className="p-3 rounded-lg bg-muted/30">
-              <p className="text-2xl font-bold">98.7%</p>
-              <p className="text-xs text-muted-foreground">Accuracy rate</p>
-            </div>
+          <div className="space-y-2">
+            <Button 
+              onClick={testClassifyEmail} 
+              disabled={!gmailTokens || isSaving}
+              variant="outline"
+              className="w-full"
+            >
+              Test Email Classification
+            </Button>
+          </div>
+          
+          <div className="space-y-2">
+            <Button 
+              onClick={testGenerateDraft} 
+              disabled={!gmailTokens || isSaving}
+              variant="outline"
+              className="w-full"
+            >
+              Test Draft Generation
+            </Button>
           </div>
 
-          <div className="flex space-x-2">
-            <Button variant="outline" className="flex-1">
-              Manage Billing
+          <div className="space-y-2">
+            <Button 
+              onClick={testUpdateTone} 
+              disabled={!gmailTokens || isSaving}
+              variant="outline"
+              className="w-full"
+            >
+              Test Update Tone Function
             </Button>
-            <Button className="flex-1 bg-gradient-to-r from-primary to-accent">
-              Upgrade Plan
-            </Button>
+          </div>
+
+          <div className="pt-2 border-t">
+            <p className="text-xs text-muted-foreground">
+              These functions test your real email processing pipeline with live data.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Billing Placeholder (static for now) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5" />
+            Billing
+          </CardTitle>
+          <CardDescription>Manage your subscription and payment details</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex justify-between">
+              <span>Current Plan</span>
+              <Badge variant="secondary">Pro</Badge>
+            </div>
+            <div className="flex justify-between">
+              <span>Next Billing Date</span>
+              <span>July 1, 2025</span>
+            </div>
+            <Button variant="outline">Upgrade Plan</Button>
           </div>
         </CardContent>
       </Card>

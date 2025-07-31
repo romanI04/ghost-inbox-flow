@@ -26,24 +26,49 @@ serve(async (req: Request) => {
   }
 
   try {
-    // Authenticate
+    // Authenticate - handle both user JWT and service role with user ID
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) throw new Error('Missing Authorization header');
-    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) throw new Error('Unauthorized');
+    
+    let userId;
+    const userIdHeader = req.headers.get('X-User-Id');
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Check if this is a service role key (starts with service_role prefix or matches our service key)
+    const isServiceRole = token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || token.startsWith('service_role');
+    
+    if (isServiceRole && userIdHeader) {
+      // Internal call with service role - use provided user ID
+      userId = userIdHeader;
+      // Using service role authentication
+    } else {
+      // Regular user call - get user from JWT
+      const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw new Error('Unauthorized');
+      userId = user.id;
+      // Using user JWT authentication
+    }
+    
+    // Create Supabase client for DB operations (always use service role for DB access)
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
     // Parse body
     const { email_id } = await req.json();
     if (!email_id) throw new Error('Missing email_id');
 
     // Fetch email and user tone
-    const { data: email, error: emailError } = await supabase.from('emails').select('*').eq('id', email_id).eq('user_id', user.id).single();
+    const { data: email, error: emailError } = await supabase.from('emails').select('*').eq('id', email_id).eq('user_id', userId).single();
     if (emailError || !email) throw new Error('Email not found');
-    const { data: tone, error: toneError } = await supabase.from('user_preferences').select('formality, emoji_usage, brevity').eq('user_id', user.id).single();
-    if (toneError) throw toneError;
+    
+    // Fetch user tone preferences (use defaults if not set)
+    const { data: tone, error: toneError } = await supabase.from('user_preferences').select('formality, emoji_usage, brevity').eq('user_id', userId).single();
+    if (toneError && toneError.code !== 'PGRST116') throw toneError; // Ignore no-row error
+    
+    console.log('Email data:', { subject: email.subject, sender: email.sender, category: email.category });
+    console.log('User tone preferences:', tone);
 
     // Generate draft with OpenAI (few-shot from historical—mock here; real: fetch last 50 sent)
     const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
@@ -68,7 +93,7 @@ Output reply text only.`;
       .from('emails')
       .update({ draft_reply: draftReply, status })
       .eq('id', email_id)
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
 
     if (updateError) throw updateError;
 

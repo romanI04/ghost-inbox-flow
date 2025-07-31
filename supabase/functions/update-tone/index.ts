@@ -1,6 +1,6 @@
 // Full code for update-tone Edge Function
 // Saves tone sliders to DB for authenticated user (Req 5.3)
-// Usage: POST with JSON { formality: 70, emoji: 30, brevity: 80 }
+// Usage: POST with JSON { formality: 70, emoji_usage: 30, brevity: 80 }
 // Requires Authorization header with user JWT (from frontend session)
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -38,11 +38,38 @@ serve(async (req: Request) => {
       throw new Error('Unauthorized');
     }
 
-    // Parse body
-    const { formality, emoji, brevity } = await req.json();
-    if (typeof formality !== 'number' || typeof emoji !== 'number' || typeof brevity !== 'number') {
-      throw new Error('Invalid input: formality, emoji, brevity must be numbers (0-100)');
+    // Parse body - support both 'emoji' and 'emoji_usage' parameter names
+    const body = await req.json();
+    console.log('Received body:', body);
+    
+    // Extract values with proper names
+    const formality = body.formality;
+    const emoji_usage = body.emoji_usage !== undefined ? body.emoji_usage : body.emoji;
+    const brevity = body.brevity;
+    
+    // Validate that all required parameters are present and are numbers
+    if (typeof formality !== 'number') {
+      throw new Error('Invalid input: formality must be a number (0-100)');
     }
+    if (typeof emoji_usage !== 'number') {
+      throw new Error('Invalid input: emoji_usage must be a number (0-100)');
+    }
+    if (typeof brevity !== 'number') {
+      throw new Error('Invalid input: brevity must be a number (0-100)');
+    }
+    
+    // Validate ranges
+    if (formality < 0 || formality > 100) {
+      throw new Error('Invalid input: formality must be between 0 and 100');
+    }
+    if (emoji_usage < 0 || emoji_usage > 100) {
+      throw new Error('Invalid input: emoji_usage must be between 0 and 100');
+    }
+    if (brevity < 0 || brevity > 100) {
+      throw new Error('Invalid input: brevity must be between 0 and 100');
+    }
+
+    console.log(`Updating tone for user ${user.id}:`, { formality, emoji_usage, brevity });
 
     // Upsert to DB
     const { error: dbError } = await supabase
@@ -50,21 +77,26 @@ serve(async (req: Request) => {
       .upsert({
         user_id: user.id,
         formality,
-        emoji_usage: emoji,
+        emoji_usage,
         brevity,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' });
 
     if (dbError) {
+      console.error('Database error:', dbError);
       throw dbError;
     }
 
-    return new Response(JSON.stringify({ message: 'Tone settings updated' }), {
+    console.log('Tone settings updated successfully');
+    return new Response(JSON.stringify({ 
+      message: 'Tone settings updated successfully',
+      preferences: { formality, emoji_usage, brevity }
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
   } catch (error) {
-    console.error(error);
+    console.error('Update tone error:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
